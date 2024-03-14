@@ -1,15 +1,27 @@
-import { GraphQLClient, gql } from "graphql-request";
+import {
+  ApolloClient,
+  ApolloLink,
+  concat,
+  createHttpLink,
+  gql,
+  InMemoryCache,
+} from "@apollo/client";
 import { getAccessToken } from "../auth";
 
-const client = new GraphQLClient("http://localhost:9000/graphql", {
-  headers: () => {
-    const accessToken = getAccessToken();
-    if (!accessToken) {
-      return {};
-    }
+const httpLink = createHttpLink({ uri: "http://localhost:9000/graphql" });
+const authLink = new ApolloLink((operation, forward) => {
+  const accessToken = getAccessToken();
+  if (accessToken) {
+    operation.setContext({
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  }
+  return forward(operation);
+});
 
-    return { Authorization: `Bearer ${accessToken}` };
-  },
+const apolloClient = new ApolloClient({
+  link: concat(authLink, httpLink),
+  cache: new InMemoryCache(),
 });
 
 export const createJob = async ({ title, description }) => {
@@ -21,11 +33,14 @@ export const createJob = async ({ title, description }) => {
     }
   `;
 
-  const { job } = await client.request(mutation, {
-    input: { title, description },
+  const { data } = await apolloClient.mutate({
+    mutation,
+    variables: {
+      input: { title, description },
+    },
   });
 
-  return job;
+  return data.job;
 };
 
 export const getCompany = async (id) => {
@@ -43,8 +58,8 @@ export const getCompany = async (id) => {
       }
     }
   `;
-  const { company } = await client.request(query, { id });
-  return company;
+  const { data } = await apolloClient.query({ query, variables: { id } });
+  return data.company;
 };
 
 export const getJob = async (id) => {
@@ -62,15 +77,14 @@ export const getJob = async (id) => {
       }
     }
   `;
-
-  const { job } = await client.request(query, { id });
-  return job;
+  const { data } = await apolloClient.query({ query, variables: { id } });
+  return data.job;
 };
 
 export const getJobs = async () => {
   // gql - Similar to "#graphql"
   const query = gql`
-    query {
+    query Jobs {
       jobs {
         id
         title
@@ -82,7 +96,6 @@ export const getJobs = async () => {
       }
     }
   `;
-
-  const { jobs } = await client.request(query);
-  return jobs;
+  const { data } = await apolloClient.query({ query });
+  return data.jobs;
 };
