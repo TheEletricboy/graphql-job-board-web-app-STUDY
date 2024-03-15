@@ -1,5 +1,6 @@
 import { getCompany } from "./db/companies.js";
 import {
+  countJobs,
   createJob,
   deleteJob,
   getJob,
@@ -29,7 +30,12 @@ export const resolvers = {
 
       return job;
     },
-    jobs: () => getJobs(),
+    jobs: async (_root, { limit, offset }) => {
+      const items = await getJobs(limit, offset);
+      const totalCount = await countJobs();
+
+      return { items, totalCount };
+    },
   },
   Mutation: {
     createJob: (_root, { input: { title, description } }, { user }) => {
@@ -67,7 +73,9 @@ export const resolvers = {
   },
   Job: {
     date: (job) => toIsoDate(job),
-    company: (job) => getCompany(job.companyId),
+    company: (job, _args, { companyLoader }) => {
+      return companyLoader.load(job.companyId);
+    },
   },
   Company: {
     jobs: (company) => getJobsByCompany(company.id),
